@@ -182,11 +182,11 @@ parser.add_option("-e", "--evaluate",
 #CORE UTILS
 coreUtils=OptionGroup(parser, "Core utilities")
 coreUtils.add_option("--output-file",
-				  action="store_true", dest="stdoutRedirection", default=False,
-				  help="Pipes all std output STDOUT to csout.log and STDERR to cserr.log")
+				  	 action="store_true", dest="stdoutRedirection", default=False,
+				  	 help="Pipes all std output STDOUT to csout.log and STDERR to cserr.log")
 coreUtils.add_option("-c", "--copy",
-				  action="store", type="string", dest="copyFile", default="",
-				  help="Copies the contents of file SOURCE to the X11 clipboard", metavar="SOURCE")
+				  	 action="store", type="string", dest="copyFile", default="",
+				  	 help="Copies the contents of file SOURCE to the X11 clipboard", metavar="SOURCE")
 parser.add_option_group(coreUtils)
 
 #TESTING UTILS
@@ -199,14 +199,14 @@ parser.add_option_group(testingUtils)
 #EVALUATION UTILS
 evaluationUtils=OptionGroup(parser, "Evaluation utilies")
 evaluationUtils.add_option("-w", "--directory",
-				  action="store", type="string", dest="workingDirectory", default=".",
-				  help="Changes the working directory DIR. By default DIR is \'.\'", metavar="DIR")
+				  		   action="store", type="string", dest="workingDirectory", default=".",
+				  		   help="Changes the working directory DIR. By default DIR is \'.\'", metavar="DIR")
 evaluationUtils.add_option("-t", "--time",
-				  action="store", type="string", dest="evaluationTime", default=1,
-				  help="Defines TIME during the program can be evaluated. Is 1 by default", metavar="TIME")
+				  		   action="store", type="string", dest="evaluationTime", default=1,
+				  		   help="Defines TIME during the program can be evaluated. Is 1 by default", metavar="TIME")
 evaluationUtils.add_option("--no-verbose",
-				  action="store_false", dest="verbose", default=True,
-				  help="Disables detailed output for evaluation. If not enables only prints total")
+				  		   action="store_false", dest="verbose", default=True,
+				  		   help="Disables detailed output for evaluation. If not enables only prints total")
 parser.add_option_group(evaluationUtils)
 
 (options, args)=parser.parse_args()
