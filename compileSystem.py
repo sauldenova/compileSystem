@@ -58,7 +58,7 @@ def locate(pattern, root=os.curdir):
             yield os.path.join(path, filename)
 
 
-def compileSource(sourceFile):
+def compileSource(sourceFile, verbose):
 	'''Compile the source file provided by the parser'''
 	#Check if source exists
 	try:
@@ -95,7 +95,7 @@ def compileSource(sourceFile):
 		return ""
 	
 	#If make returned a warning
-	elif 'warning' in open('.compile.log').read():
+	elif 'warning' in open('.compile.log').read() and verbose:
 		sys.stderr.write(bcolors.WARNING + 'WARNING ERROR FOR ' + sourceFile + '\nTHE WARNING WAS:\n' + bcolors.ENDC)
 		subprocess.call(['echo', '-ne', bcolors.DEBUG])
 		subprocess.call(['cat', '.compile.log'])
@@ -116,6 +116,7 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode):
 	'''Evaluate the source file with the .in cases found in dir'''
 	total=0
 	testCases=0
+	totalTime=0.0;
 	executable, extension = os.path.splitext(sourceFile)
 	for IN in sorted(locate("*.in*", currentDirectory), key = stringSplitByNumbers) : #For each file that has .in
 		OUT=IN.replace(".in", ".out")
@@ -145,12 +146,8 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode):
 		os.system("tr -d ' \t\n\r\f' < " + OUT + " > /tmp/cs2.out")
 		
 		#Obtain the case number from the IN name 
-		caseNumber=IN.replace(os.getcwd(), "")
-		caseNumber=caseNumber.replace(os.path.dirname(IN), "")
-		caseNumber=caseNumber.replace(os.path.basename(executable), "")
-		caseNumber=caseNumber.replace(".in", "")
-		caseNumber=caseNumber.replace(".", "")
-		caseNumber=caseNumber.replace("/", "")
+		caseNumber=IN.replace(os.path.dirname(IN), "")
+		caseNumber=re.sub(r'[^0-9]', '', caseNumber);
 
 		#Open the file of strings
 		temp1=open('/tmp/cs1.out', 'r')
@@ -168,31 +165,33 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode):
 			time=timeFile.readline()[0:4]
 		#time=time.replace(".", "")
 		
-		if (float(time)+0.03)>=float(maximumTime) and not str1 in str2: #If time was exceded
+		if (float(time)+0.1)>=float(maximumTime) and not(str1==str2): #If time was exceded
 			if verbose:
+				totalTime+=float(maximumTime);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":TLE\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
+				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(maximumTime) + ".00\n" + bcolors.ENDC)
 		elif strError != "" or str1 == "" or segFault:
 			if verbose:
+				totalTime+=float(time);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":RTE\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
-		elif str1 in str2 or str1 == "CORRECT": #If output file string is in the case string
+		elif str1 in str2: #If output file string is in the case string
 			if verbose:
+				totalTime+=float(time);
 				sys.stdout.write(bcolors.OKGREEN + "CASE " + caseNumber + ":OK\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
 			total+=1
 		else: #If not case is wrong
 			if verbose:
+				totalTime+=float(time);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":WA\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
 		testCases+=1
 		
-		#Remove temporary files
-		os.system("rm /tmp/cstime /tmp/cstemporal.out /tmp/cstemp1.out /tmp/cstemp2.out /tmp/cstempError")
-	
 	if testCases>0:
 		if verbose:
-			sys.stdout.write(bcolors.HEADER + "TOTAL: " + str(total*100/testCases) + "\n" + bcolors.ENDC)
+			sys.stdout.write(bcolors.HEADER + "TOTAL: " + str(total*100/testCases) + "\t\t")
+			sys.stdout.write(bcolors.HEADER + "TOTAL TIME ELAPSED: " + str(totalTime) + "\n" + bcolors.ENDC)
 		else:
 			sys.stdout.write(str(total*100/testCases) + "\n")
 	else:
@@ -292,20 +291,20 @@ for file in args:
 	except IOError as e: #Compile
 		sys.stderr(bcolors.FAIL + "ERROR FILE " + file + "DOES NOT EXIST\n" + bcolors.ENDC);
 	if options.compile:
-		compileSource(file)
+		compileSource(file, options.verbose)
 	elif options.debug: #Debug
-		executable=compileSource(file)
+		executable=compileSource(file, options.verbose)
 		if executable != "":
 			subprocess.call(['echo', '-ne', bcolors.DEBUG])
 			subprocess.call(['gdb', '-q', executable])
 	elif options.test: #Test
-		executable=compileSource(file)
+		executable=compileSource(file, options.verbose)
 		if executable != "": 
 			for i in range(1, options.testingTimes+1): #Run the program testingTimes
 				sys.stdout.write(bcolors.DEBUG + 'Testing ' + executable + ': ' + str(options.testingTimes-i+1) + ' times\n' + bcolors.ENDC)
 				subprocess.call(['./' + executable]); #TODO change Ctrl-C Behavior
 	elif options.evaluate: #Evaluate
-		executable=compileSource(file)
+		executable=compileSource(file, options.verbose)
 		if executable != "":
 			evaluate(file, options.workingDirectory, options.evaluationTime, options.verbose, options.ioiMode)
 
