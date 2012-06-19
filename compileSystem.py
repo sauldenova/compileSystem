@@ -138,11 +138,11 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 			executable="./"+executable;
 		varTime="ulimit -t " + str(maximumTime) + "; " 
 		globalLimits=varMemory + varStack + varTime
-		segFault=False
+		memoryError=False
 		try:
 			os.system(globalLimits + "time -o /tmp/cstime " + executable + " < " + IN + " > /tmp/cs.out 2> /tmp/cserror")
 		except MemoryError as e:
-			segFault=True
+			memoryError=True
 		#For comparation of programs that have multiple solutions,
 		#this script removes all spaces from files and turns them into strings
 		os.system("tr -d ' \t\n\r\f' < /tmp/cs.out > /tmp/cs1.out") 
@@ -168,12 +168,17 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 			time=timeFile.readline()[0:4]
 		#time=time.replace(".", "")
 		
-		if (float(time)+0.1)>=float(maximumTime) and not(str1==str2): #If time was exceded
+		if memoryError or "terminate" in strError:
+			if verbose:
+				totalTime+=float(time);
+				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":MLE\t\t")
+				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(time) + "\n" + bcolors.ENDC)
+		elif (float(time)+0.1)>=float(maximumTime) and not(str1==str2): #If time was exceded
 			if verbose:
 				totalTime+=float(maximumTime);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":TLE\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(maximumTime) + ".00\n" + bcolors.ENDC)
-		elif strError != "" or str1 == "" or segFault:
+		elif strError != "" or str1 == "":
 			if verbose:
 				totalTime+=float(time);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":RTE\t\t")
