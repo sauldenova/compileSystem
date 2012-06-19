@@ -112,7 +112,7 @@ def compileSource(sourceFile, verbose):
 	return fileName
 
 		
-def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode):
+def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory=64):
 	'''Evaluate the source file with the .in cases found in dir'''
 	total=0
 	testCases=0
@@ -125,17 +125,20 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode):
 		except IOError as e:
 			continue
 		
-		segFault=False
 		#Execute the process
 		#ulimit kills the process if it uses more than the given time
 		#Uses time for taking the time of the process
 		#The output is stored in temporal.out file
+		
+		varMemory="ulimit -v " + str(memory*1024) + "; "
 		varStack=""
 		if ioiMode:
 			varStack="ulimit -s unlimited; "
 		if not specialMatch(executable):
 			executable="./"+executable;
-		globalLimits=varStack + "ulimit -t " + str(maximumTime) + "; " 
+		varTime="ulimit -t " + str(maximumTime) + "; " 
+		globalLimits=varMemory + varStack + varTime
+		segFault=False
 		try:
 			os.system(globalLimits + "time -o /tmp/cstime " + executable + " < " + IN + " > /tmp/cs.out 2> /tmp/cserror")
 		except MemoryError as e:
@@ -252,8 +255,11 @@ evaluationUtils.add_option("-w", "--directory",
 				  action="store", type="string", dest="workingDirectory", default=".",
 				  help="Changes the working directory DIR. By default DIR is \'.\'", metavar="DIR")
 evaluationUtils.add_option("-t", "--time",
-				  action="store", type="string", dest="evaluationTime", default=1,
+				  action="store", type="int", dest="evaluationTime", default=1,
 				  help="Defines TIME during the program can be evaluated. Is 1 by default", metavar="TIME")
+evaluationUtils.add_option("-m", "--memory",
+				  action="store", type="int", dest="totalMemory", default=64,
+				  help="Defines maximum MEMORY available for the program during evaluation. Is 64MB by default", metavar="MEMORY")
 evaluationUtils.add_option("--no-verbose",
 				  action="store_false", dest="verbose", default=True,
 				  help="Disables detailed output for evaluation. If not enables only prints total")
@@ -306,5 +312,5 @@ for file in args:
 	elif options.evaluate: #Evaluate
 		executable=compileSource(file, options.verbose)
 		if executable != "":
-			evaluate(file, options.workingDirectory, options.evaluationTime, options.verbose, options.ioiMode)
+			evaluate(file, options.workingDirectory, options.evaluationTime, options.verbose, options.ioiMode, options.totalMemory)
 
