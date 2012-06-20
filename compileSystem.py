@@ -300,7 +300,7 @@ for file in args:
 	try:
 		open(file, "r")
 	except IOError as e: #Compile
-		sys.stderr(bcolors.FAIL + "ERROR FILE " + file + "DOES NOT EXIST\n" + bcolors.ENDC);
+		sys.stderr(bcolors.FAIL + "ERROR FILE " + str(file) + "DOES NOT EXIST\n" + bcolors.ENDC);
 	if options.compile:
 		compileSource(file, options.verbose)
 	elif options.debug: #Debug
