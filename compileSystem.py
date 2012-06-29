@@ -1,13 +1,25 @@
 #!/usr/bin/python
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+#
+#				 -=-=-=-=-=-=-=-=-=-
+#				 - Compile System  -
+#				 -=-=-=-=-=-=-=-=-=-
+#
+#     Compile, Evaluate and Debug C/C++ Programs
+# 			Author:Saul de Nova Caballero
+#
+#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 #TODO CONTROL-C BEHAVIOR
 
 import fnmatch
 import os
+import re
+import resource
 import subprocess
 import signal
 import sys
-import re
+import time
 from optparse import OptionGroup, OptionParser
 
 class bcolors:
@@ -114,6 +126,29 @@ def compileSource(sourceFile, verbose, optimized):
 	sys.stdout.write(bcolors.HEADER + 'COMPILATION SUCCESS OF ' + fileName + '\n' + bcolors.ENDC)
 	return fileName
 
+MAXTIME=1
+MAXMEMBYTES=64*1024
+MAXSTACK=""
+def processLimit():
+	try:
+		resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
+	except ValueError:
+		sys.stderr.write(bcolors.FAIL + 'Limit NPROC specified is invalid\n' + bcolors.ENDC)
+	try:
+		if(MAXSTACK=="UNLIMITED") :
+			resource.setrlimit(resource.RLIMT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
+	except ValueError:
+		sys.stderr.write(bcolors.FAIL + 'Limit STACK specified is invalid\n' + bcolors.ENDC)
+	try:
+		resource.setrlimit(resource.RLIMIT_CPU, (MAXTIME, MAXTIME))
+	except ValueError:
+		sys.stderr.write(bcolors.FAIL + 'Limit TIME specified is invalid\n' + bcolors.ENDC)
+	try:
+		resource.setrlimit(resource.RLIMIT_AS, (MAXMEMBYTES, MAXMEMBYTES))
+	except ValueError:
+		sys.stderr.write(bcolors.FAIL + 'Limit MEMORY specified is invalid\n' + bcolors.ENDC)
+
+
 		
 def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory, noOuts, multipleSolutions, alternateValues):
 	'''Evaluate the source file with the .in cases found in dir'''
@@ -124,101 +159,162 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 
 	try:
 		open(alternateValues, "r")
-	except IOError as e:
+	except IOError:
 		if(alternateValues!=""):
 			sys.stderr.write(bcolors.FAIL + 'Failed to open table\n' + bcolors.ENDC);
 		alternateValues=""
 	
-	if(alternateValues!="") :
+	if(alternateValues!=""):
 		fileValues=open(alternateValues, "r")
 
-	for IN in sorted(locate("*.in*", currentDirectory), key = stringSplitByNumbers) : #For each file that has .in
+	try:
+		cslog=open('.cslog', 'w')
+	except IOError:
+		sys.stderr.write(bcolors.FAIL + 'ABANDON THE SHIP\n' + bcolors.ENDC);
+		return
+	#For each *.in* file found in the working directory sort the files
+	for IN in sorted(locate("*.in*", currentDirectory), key = stringSplitByNumbers):
+		#Search if file exists
+		try:
+			fileIn=open(IN, "r")
+		except IOError:
+			continue
+
+		#Check OUT file exists
 		OUT=IN.replace(".in", ".out")
 		if not noOuts:
 			try:
-				open(OUT, "r")
-			except IOError as e:
+				fileOut=open(OUT, "r")
+			except IOError:
 				continue
 
-		value=1
-		if(alternateValues!=""):
-			value=float(fileValues.readline())
-
-		#Execute the process
-		#ulimit kills the process if it uses more than the given time
-		#Uses time for taking the time of the process
-		#The output is stored in temporal.out file	
-		varMemory="ulimit -v " + str(memory*1024) + "; "
-		varStack=""
-		if ioiMode:
-			varStack="ulimit -s unlimited; "
-		if not specialMatch(executable):
-			executable="./"+executable;
-		varTime="ulimit -t " + str(maximumTime) + "; " 
-		globalLimits=varMemory + varStack + varTime
-		memoryError=False
-		try:
-			os.system(globalLimits + "time -o /tmp/cstime " + executable + " < " + IN + " > /tmp/cs.out 2> /tmp/cserror")
-		except MemoryError as e:
-			memoryError=True
-
-		#For comparation of programs that have multiple solutions,
-		#this script removes all spaces from files and turns them into strings
-		os.system("tr -d ' \t\n\r\f' < /tmp/cs.out > /tmp/cs1.out") 
-		temp1=open('/tmp/cs1.out', 'r')
-		str1=temp1.read()
-
-		str2=""
-		if not noOuts:
-			os.system("tr -d ' \t\n\r\f' < " + OUT + " > /tmp/cs2.out")
-			temp2=open('/tmp/cs2.out', 'r')
-			str2=temp2.read()
-		
-		errorFile=open('/tmp/cserror', 'r')
-		strError=errorFile.read()
+		if(alternateValues==""):
+			testCases+=1
 
 		#Obtain the case number from the IN name 
 		caseNumber=IN.replace(os.path.dirname(IN), "")
 		caseNumber=re.sub(r'[^0-9]', '', caseNumber);
 
-		#Find the time used by the program
-		timeFile=open('/tmp/cstime', 'r')
-		time=timeFile.readline()[0:4]
-		if not isNumber(time):
-			time=timeFile.readline()[0:4]
-		#time=time.replace(".", "")
+		#Read values from table if specified
+		value=1
+		if(alternateValues!=""):
+			try:
+				value=float(fileValues.readline())
+			except ValueError:
+				sys.stderr.write(bcolors.FAIL + 'Invalid value from table\nTERMINATING' + bcolors.ENDC)
+				break
 		
-		if memoryError or "terminate" in strError:
-			if verbose:
-				totalTime+=float(time);
-				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":MLE\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(time) + "\n" + bcolors.ENDC)
-		elif (float(time)+0.1)>=float(maximumTime) and not(str1==str2): #If time was exceded
+		filecs=open('/tmp/cs.out', 'w')
+		#Execute the process
+		#ulimit kills the process if it uses more than the given time
+		#Uses time for taking the time of the process
+		#The output is stored in temporal.out file	
+		global MAXMEMBYTES
+		global MAXTIME
+		MAXTIME=maximumTime
+		MAXMEMBYTES=memory*1024
+		if ioiMode:
+			global MAXSTACK
+			MAXSTACK="UNLIMITED"
+		if not specialMatch(executable):
+			executable="./"+executable;
+		
+		timeStart=time.time()
+		subprocessState=subprocess.Popen(executable, stdin=fileIn, stdout=filecs, preexec_fn=processLimit)
+		subprocessState.wait()
+		timeP=time.time()-timeStart
+		timePrint='%.2f' % timeP
+
+		fileIn.close()
+		filecs.close()
+		if timeP>maximumTime:
 			if verbose:
 				totalTime+=float(maximumTime);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":TLE\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(maximumTime) + ".00\n" + bcolors.ENDC)
-		elif strError != "" or str1 == "":
+				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
+			continue
+		if int(subprocessState.returncode)==-9:
 			if verbose:
-				totalTime+=float(time);
+				totalTime+=float(timePrint);
+				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":MLE\t\t")
+				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
+			continue
+		if int(subprocessState.returncode)!=0:
+			if verbose:
+				totalTime+=float(timePrint);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":RTE\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
-		elif (multipleSolutions and (str1 in str2))or(str1==str2)or(noOuts): #If output file string is in the case string
+				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
+			continue
+		#varMemory="ulimit -v " + str(memory*1024) + "; "
+		#varStack=""
+		#if ioiMode:
+			#varStack="ulimit -s unlimited; "
+		#if not specialMatch(executable):
+			#executable="./"+executable;
+		#varTime="ulimit -t " + str(maximumTime) + "; " 
+		#globalLimits=varMemory + varStack + varTime
+		#memoryError=False
+		#try:
+			#os.system(globalLimits + "time -o /tmp/cstime " + executable + " < " + IN + " > /tmp/cs.out 2> /tmp/cserror")
+		#except MemoryError as e:
+			#memoryError=True
+
+		#For comparation of programs that have multiple solutions,
+		#this script removes all spaces from files and turns them into strings
+		try:
+			filecs=open('/tmp/cs.out', 'r')
+		except IOError:
+			cslog.write('Error opening cs.out\n')
+			continue
+		filecs1=open('/tmp/cs1.out', 'w')
+		subprocess.call(['tr', '-d', '\t\n\r\f'], stdin=filecs, stdout=filecs1)
+		filecs.close()
+		filecs1.close()
+		try:
+			temp1=open('/tmp/cs1.out', 'r')
+		except IOError:
+			cslog.write('Error opening cs1.out\n')
+			continue
+		str1=temp1.read()
+		
+		#Converts the output of the program to a string
+		str2=""
+		if not noOuts:
+			filecs2=open('/tmp/cs2.out', "w")
+			subprocess.call(['tr', '-d', '\t\n\r\f'], stdin=fileOut, stdout=filecs2)
+			filecs2.close()
+
+			try:
+				temp2=open('/tmp/cs2.out', 'r')
+			except IOError:
+				cslog.write('Error opening cs2.out\n')
+				continue
+			str2=temp2.read()
+			temp2.close()
+		
+		#Open the errorFile
+		try:
+			errorFile=open('/tmp/cserror', 'r')
+		except IOError:
+			cslog.write('Error reading cserrorFile\n')
+			continue
+		strError=errorFile.read()
+
+		if (multipleSolutions and (str1 in str2))or(str1==str2)or(noOuts): #If output file string is in the case string
 			if verbose:
-				totalTime+=float(time);
+				totalTime+=float(timePrint);
 				strOut="OK"
 				if noOuts or multipleSolutions:
 					strOut="NP"
 				sys.stdout.write(bcolors.OKGREEN + "CASE " + caseNumber + ":" + strOut + "\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
+				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
 			total+=value
 		else: #If not case is wrong
 			if verbose:
-				totalTime+=float(time);
+				totalTime+=float(timePrint);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":WA\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
-		if(alternateValues==""):
-			testCases+=1
+				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
+		fileOut.close()
 		
 	if testCases>0 or alternateValues:
 		if verbose:
@@ -228,7 +324,7 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 			else:
 				endValue=total*100/testCases
 			sys.stdout.write(bcolors.HEADER + "TOTAL: " + str(int(endValue)) + "\t\t")
-			sys.stdout.write(bcolors.HEADER + "TOTAL TIME ELAPSED: " + str(totalTime) + "\n" + bcolors.ENDC)
+			sys.stdout.write(bcolors.HEADER + "TOTAL TIME ELAPSED: " + '%.2f' % totalTime + "\n" + bcolors.ENDC)
 		else:
 			sys.stdout.write(str(total*100/testCases) + "\n")
 	else:
