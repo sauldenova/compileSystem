@@ -58,7 +58,7 @@ def locate(pattern, root=os.curdir):
             yield os.path.join(path, filename)
 
 
-def compileSource(sourceFile, verbose):
+def compileSource(sourceFile, verbose, optimized):
 	'''Compile the source file provided by the parser'''
 	#Check if source exists
 	try:
@@ -78,8 +78,11 @@ def compileSource(sourceFile, verbose):
 		return ""
 	
 	#Open the make configuration file
+	optimization=""
+	if(optimized):
+		optimization=" -O2"
 	makeFile=open('.makeFile', 'w')
-	makeFile.write('all:\n\t' + compiler + ' -g ' + sourceFile + ' -o ' + fileName + ' -O2\n')
+	makeFile.write('all:\n\t' + compiler + ' -g ' + sourceFile + ' -o ' + fileName + optimization + '\n')
 	makeFile.close()
 	
 	#Call make
@@ -112,24 +115,39 @@ def compileSource(sourceFile, verbose):
 	return fileName
 
 		
-def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory=64):
+def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory, noOuts, multipleSolutions, alternateValues):
 	'''Evaluate the source file with the .in cases found in dir'''
 	total=0
 	testCases=0
 	totalTime=0.0;
 	executable, extension = os.path.splitext(sourceFile)
+
+	try:
+		open(alternateValues, "r")
+	except IOError as e:
+		if(alternateValues!=""):
+			sys.stderr.write(bcolors.FAIL + 'Failed to open table\n' + bcolors.ENDC);
+		alternateValues=""
+	
+	if(alternateValues!="") :
+		fileValues=open(alternateValues, "r")
+
 	for IN in sorted(locate("*.in*", currentDirectory), key = stringSplitByNumbers) : #For each file that has .in
 		OUT=IN.replace(".in", ".out")
-		try: #If .out exists
-			open(OUT, "r");
-		except IOError as e:
-			continue
-		
+		if not noOuts:
+			try:
+				open(OUT, "r")
+			except IOError as e:
+				continue
+
+		value=1
+		if(alternateValues!=""):
+			value=float(fileValues.readline())
+
 		#Execute the process
 		#ulimit kills the process if it uses more than the given time
 		#Uses time for taking the time of the process
-		#The output is stored in temporal.out file
-		
+		#The output is stored in temporal.out file	
 		varMemory="ulimit -v " + str(memory*1024) + "; "
 		varStack=""
 		if ioiMode:
@@ -143,23 +161,25 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 			os.system(globalLimits + "time -o /tmp/cstime " + executable + " < " + IN + " > /tmp/cs.out 2> /tmp/cserror")
 		except MemoryError as e:
 			memoryError=True
+
 		#For comparation of programs that have multiple solutions,
 		#this script removes all spaces from files and turns them into strings
 		os.system("tr -d ' \t\n\r\f' < /tmp/cs.out > /tmp/cs1.out") 
-		os.system("tr -d ' \t\n\r\f' < " + OUT + " > /tmp/cs2.out")
+		temp1=open('/tmp/cs1.out', 'r')
+		str1=temp1.read()
+
+		str2=""
+		if not noOuts:
+			os.system("tr -d ' \t\n\r\f' < " + OUT + " > /tmp/cs2.out")
+			temp2=open('/tmp/cs2.out', 'r')
+			str2=temp2.read()
 		
+		errorFile=open('/tmp/cserror', 'r')
+		strError=errorFile.read()
+
 		#Obtain the case number from the IN name 
 		caseNumber=IN.replace(os.path.dirname(IN), "")
 		caseNumber=re.sub(r'[^0-9]', '', caseNumber);
-
-		#Open the file of strings
-		temp1=open('/tmp/cs1.out', 'r')
-		temp2=open('/tmp/cs2.out', 'r')
-		errorFile=open('/tmp/cserror', 'r')
-
-		str1=temp1.read()
-		str2=temp2.read()
-		strError=errorFile.read()
 
 		#Find the time used by the program
 		timeFile=open('/tmp/cstime', 'r')
@@ -183,22 +203,31 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 				totalTime+=float(time);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":RTE\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
-		elif str1 in str2: #If output file string is in the case string
+		elif (multipleSolutions and (str1 in str2))or(str1==str2)or(noOuts): #If output file string is in the case string
 			if verbose:
 				totalTime+=float(time);
-				sys.stdout.write(bcolors.OKGREEN + "CASE " + caseNumber + ":OK\t\t")
+				strOut="OK"
+				if noOuts or multipleSolutions:
+					strOut="NP"
+				sys.stdout.write(bcolors.OKGREEN + "CASE " + caseNumber + ":" + strOut + "\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
-			total+=1
+			total+=value
 		else: #If not case is wrong
 			if verbose:
 				totalTime+=float(time);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":WA\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + time + "\n" + bcolors.ENDC)
-		testCases+=1
+		if(alternateValues==""):
+			testCases+=1
 		
-	if testCases>0:
+	if testCases>0 or alternateValues:
 		if verbose:
-			sys.stdout.write(bcolors.HEADER + "TOTAL: " + str(total*100/testCases) + "\t\t")
+			endValue=0
+			if(alternateValues!=""):
+				endValue=total
+			else:
+				endValue=total*100/testCases
+			sys.stdout.write(bcolors.HEADER + "TOTAL: " + str(int(endValue)) + "\t\t")
 			sys.stdout.write(bcolors.HEADER + "TOTAL TIME ELAPSED: " + str(totalTime) + "\n" + bcolors.ENDC)
 		else:
 			sys.stdout.write(str(total*100/testCases) + "\n")
@@ -245,6 +274,9 @@ miscellaneousUtils.add_option("--output-file",
 miscellaneousUtils.add_option("-c", "--copy",
 				  action="store", type="string", dest="copyFile", default="",
 				  help="Copies the contents of file SOURCE to the X11 clipboard", metavar="SOURCE")
+miscellaneousUtils.add_option("--no-optimize",
+				  action="store_false", dest="optimize", default=True,
+				  help="Sets the -O2 option in the C/C++ compiler. It is true by default")
 parser.add_option_group(miscellaneousUtils)
 
 #TESTING UTILS
@@ -268,6 +300,15 @@ evaluationUtils.add_option("-m", "--memory",
 evaluationUtils.add_option("--no-verbose",
 				  action="store_false", dest="verbose", default=True,
 				  help="Disables detailed output for evaluation. If not enables only prints total")
+evaluationUtils.add_option("--no-output-files",
+				  action="store_true", dest="noOuts", default=False,
+				  help="Makes evaluator check only for TLE and MLE")
+evaluationUtils.add_option("--multiple-solutions",
+				  action="store_true", dest="multipleSolutions", default=False,
+				  help="Changes evaluation to consider mutliple solutions")
+evaluationUtils.add_option("--alternate-values",
+				  action="store", type="string", dest="alternateValues", default="",
+				  help="Allows to load an alternate points table", metavar="POINTS TABLE")
 evaluationUtils.add_option("--new-ioi-mode",
 				  action="store_true", dest="ioiMode", default=False,
 				  help="Enables new IOI rules mode for evaluation of cases and unlimited stack size")
@@ -302,20 +343,21 @@ for file in args:
 	except IOError as e: #Compile
 		sys.stderr(bcolors.FAIL + "ERROR FILE " + str(file) + "DOES NOT EXIST\n" + bcolors.ENDC);
 	if options.compile:
-		compileSource(file, options.verbose)
+		compileSource(file, options.verbose, options.optimize)
 	elif options.debug: #Debug
-		executable=compileSource(file, options.verbose)
+		executable=compileSource(file, options.verbose, options.optimize)
 		if executable != "":
 			subprocess.call(['echo', '-ne', bcolors.DEBUG])
 			subprocess.call(['gdb', '-q', executable])
 	elif options.test: #Test
-		executable=compileSource(file, options.verbose)
+		executable=compileSource(file, options.verbose, options.optimize)
 		if executable != "": 
 			for i in range(1, options.testingTimes+1): #Run the program testingTimes
 				sys.stdout.write(bcolors.DEBUG + 'Testing ' + executable + ': ' + str(options.testingTimes-i+1) + ' times\n' + bcolors.ENDC)
 				subprocess.call(['./' + executable]); #TODO change Ctrl-C Behavior
 	elif options.evaluate: #Evaluate
-		executable=compileSource(file, options.verbose)
+		executable=compileSource(file, options.verbose, options.optimize)
 		if executable != "":
-			evaluate(file, options.workingDirectory, options.evaluationTime, options.verbose, options.ioiMode, options.totalMemory)
+			evaluate(file, options.workingDirectory, options.evaluationTime, options.verbose, 
+					       options.ioiMode, options.totalMemory, options.noOuts, options.multipleSolutions, options.alternateValues)
 
