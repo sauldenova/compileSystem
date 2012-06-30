@@ -10,8 +10,6 @@
 #
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-#TODO CONTROL-C BEHAVIOR
-
 import fnmatch
 import os
 import re
@@ -51,16 +49,6 @@ def specialMatch(strg, search=re.compile(r'[^A-Za-z0-9.]').search):
 
 def TrueXor(*args):
 	return sum(args)<=1
-
-
-def isNumber(a):
-	'''Check if a string is a number'''
-	try:
-		float(a)
-		return True
-	except ValueError:
-		return False
-
 
 def locate(pattern, root=os.curdir):
     '''Locate all files matching supplied filename pattern in and below
@@ -330,18 +318,17 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 	else:
 		sys.stdout.write(bcolors.FAIL + "ERROR COULD NOT FIND CASES FOR " + sourceFile + "\n" + bcolors.ENDC)
 
-def signalHandler(signal, frame):
-	'''Kill subprocess for testing'''
-	sys.stdout.write(bcolors.FAIL + "Subprocess received signal SIGINT stopping testing\n" + bcolors.ENDC)
-	os.kill(testingProcess.pid, signal.SIGTERM)
-
-def preexecFunction():
-	'''Overwrite the SIGINT signal handler for signalHandler'''
-	signal.signal(signal.SIGINT, signalHandler);
+def killProcess(sign, frame):
+	sys.stdout.write(bcolors.ENDC);
+	sys.stderr.write(bcolors.ENDC);
+	os.killpg(os.getpgrp(), signal.SIGTERM)
+	os.exit(0)
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #-=-=-=-=-=-=-=-=-=-=-=-=MAIN START-=-=-=-=-=-=-=-=-=-=-=-=-=
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+signal.signal(signal.SIGINT, killProcess);
 
 #PARSER
 parser=OptionParser(usage="%prog [OPTION]... [FILE]...", 
@@ -450,7 +437,7 @@ for file in args:
 		if executable != "": 
 			for i in range(1, options.testingTimes+1): #Run the program testingTimes
 				sys.stdout.write(bcolors.DEBUG + 'Testing ' + executable + ': ' + str(options.testingTimes-i+1) + ' times\n' + bcolors.ENDC)
-				subprocess.call(['./' + executable]); #TODO change Ctrl-C Behavior
+				subprocess.call(['./' + executable]); 
 	elif options.evaluate: #Evaluate
 		executable=compileSource(file, options.verbose, options.optimize)
 		if executable != "":
