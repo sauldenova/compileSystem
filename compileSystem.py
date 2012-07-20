@@ -115,7 +115,7 @@ def compileSource(sourceFile, verbose, optimized):
 	return fileName
 
 MAXTIME=1
-MAXMEMBYTES=64*1024
+MAXMEMBYTES=64*1024*1024
 MAXSTACK=""
 def processLimit():
 	try:
@@ -200,7 +200,7 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 		global MAXMEMBYTES
 		global MAXTIME
 		MAXTIME=maximumTime
-		MAXMEMBYTES=memory*1024
+		MAXMEMBYTES=memory*1024*1024
 		if ioiMode:
 			global MAXSTACK
 			MAXSTACK="UNLIMITED"
@@ -280,14 +280,6 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 			str2=temp2.read()
 			temp2.close()
 		
-		#Open the errorFile
-		try:
-			errorFile=open('/tmp/cserror', 'r')
-		except IOError:
-			cslog.write('Error reading cserrorFile\n')
-			continue
-		strError=errorFile.read()
-
 		if (multipleSolutions and (str1 in str2))or(str1==str2)or(noOuts): #If output file string is in the case string
 			if verbose:
 				totalTime+=float(timePrint);
@@ -360,6 +352,9 @@ miscellaneousUtils.add_option("-c", "--copy",
 miscellaneousUtils.add_option("--no-optimize",
 				  action="store_false", dest="optimize", default=True,
 				  help="Sets the -O2 option in the C/C++ compiler. It is true by default")
+miscellaneousUtils.add_option("--no-compile",
+				  action="store_true", dest="noCompile", default=False,
+				  help="Forces the program to not compile the source file. It is false by default")
 parser.add_option_group(miscellaneousUtils)
 
 #TESTING UTILS
@@ -420,27 +415,35 @@ if options.copyFile != "":
 	os.system("cat " + options.copyFile + " | xclip -selection c")	
 
 #EXECUTE OPTIONS
-for file in args:
+for sourceFile in args:
+	executable, extension=os.path.splitext(sourceFile)
+
+	#Check if sourceFile exists
 	try:
-		open(file, "r")
+		open(sourceFile, "r")
 	except IOError as e: #Compile
-		sys.stderr(bcolors.FAIL + "ERROR FILE " + str(file) + "DOES NOT EXIST\n" + bcolors.ENDC);
+		sys.stderr(bcolors.FAIL + "ERROR FILE " + str(executable) + "DOES NOT EXIST\n" + bcolors.ENDC);
+		continue
+	
+	#Compiling options
 	if options.compile:
-		compileSource(file, options.verbose, options.optimize)
-	elif options.debug: #Debug
-		executable=compileSource(file, options.verbose, options.optimize)
+		compileSource(sourceFile, options.verbose, options.optimize)
+		continue
+	
+	if not options.noCompile:
+		compileSource(sourceFile, options.verbose, options.optimize)
+
+	if options.debug: #Debug
 		if executable != "":
 			subprocess.call(['echo', '-ne', bcolors.DEBUG])
 			subprocess.call(['gdb', '-q', executable])
 	elif options.test: #Test
-		executable=compileSource(file, options.verbose, options.optimize)
 		if executable != "": 
 			for i in range(1, options.testingTimes+1): #Run the program testingTimes
 				sys.stdout.write(bcolors.DEBUG + 'Testing ' + executable + ': ' + str(options.testingTimes-i+1) + ' times\n' + bcolors.ENDC)
 				subprocess.call(['./' + executable]); 
 	elif options.evaluate: #Evaluate
-		executable=compileSource(file, options.verbose, options.optimize)
 		if executable != "":
-			evaluate(file, options.workingDirectory, options.evaluationTime, options.verbose, 
+			evaluate(sourceFile, options.workingDirectory, options.evaluationTime, options.verbose, 
 					       options.ioiMode, options.totalMemory, options.noOuts, options.multipleSolutions, options.alternateValues)
 
