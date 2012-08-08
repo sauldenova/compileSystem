@@ -174,7 +174,11 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 			try:
 				fileOut=open(OUT, "r")
 			except IOError:
-				continue
+				OUT=IN.replace(".in", ".sol")
+				try:
+					fileOut=open(OUT, "r")
+				except IOError:
+					continue
 
 		if(alternateValues==""):
 			testCases+=1
@@ -294,7 +298,8 @@ def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory
 				totalTime+=float(timePrint);
 				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":WA\t\t")
 				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
-		fileOut.close()
+		if not noOuts:
+			fileOut.close()
 		
 	if testCases>0 or alternateValues:
 		if verbose:
@@ -426,7 +431,7 @@ for sourceFile in args:
 		continue
 	
 	#Compiling options
-	if options.compile:
+	if options.compile and not options.noCompile:
 		compileSource(sourceFile, options.verbose, options.optimize)
 		continue
 	
