@@ -10,6 +10,8 @@
 #
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+#IMPLEMENT no fork()
+
 import fnmatch
 import os
 import re
@@ -417,7 +419,14 @@ if options.stdoutRedirection:
 
 #CLIPBOARD COPY
 if options.copyFile != "":
-	os.system("cat " + options.copyFile + " | xclip -selection c")	
+	posibleCopy=True
+	try:
+		open(options.copyFile, "r")
+	except IOError:
+		sys.stderr.write(bcolors.FAIL + "ERROR COULD NOT OPEN FILE FOR COPYING" + bcolors.ENDC)
+		posibleCopy=False
+	if posibleCopy:
+		os.system("cat " + options.copyFile + " | xclip -selection c")	
 
 #EXECUTE OPTIONS
 for sourceFile in args:
