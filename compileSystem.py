@@ -1,16 +1,17 @@
 #!/usr/bin/python
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
-#				 -=-=-=-=-=-=-=-=-=-
-#				 - Compile System  -
-#				 -=-=-=-=-=-=-=-=-=-
+#				   -=-=-=-=-=-=-=-=-=-
+#				   - Compile System  -
+#			 	   -=-=-=-=-=-=-=-=-=-
 #
-#     Compile, Evaluate and Debug C/C++ Programs
-# 			Author:Saul de Nova Caballero
+#       Compile, Evaluate and Debug C/C++ Programs
+# 		   	  Author:Saul de Nova Caballero
 #
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 #IMPLEMENT no fork()
+#Check intro names with special characters
 
 import fnmatch
 import os
@@ -22,6 +23,7 @@ import sys
 import time
 from optparse import OptionGroup, OptionParser
 
+#ASCII color codes for printing in terminal
 class bcolors:
 	HEADER = '\033[1;95m'
 	OKBLUE = '\033[94m'
@@ -116,9 +118,11 @@ def compileSource(sourceFile, verbose, optimized):
 	sys.stdout.write(bcolors.HEADER + 'COMPILATION SUCCESS OF ' + fileName + '\n' + bcolors.ENDC)
 	return fileName
 
+#Global variables for child process limit
 MAXTIME=1
 MAXMEMBYTES=64*1024*1024
 MAXSTACK=""
+
 def processLimit():
 	try:
 		resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
