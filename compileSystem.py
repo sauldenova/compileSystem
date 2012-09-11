@@ -335,7 +335,7 @@ signal.signal(signal.SIGINT, killProcess);
 
 #PARSER
 parser=OptionParser(usage="%prog [OPTION]... [FILE]...", 
-					version="%prog 0.1",
+					version="%prog 1.0",
 					description="Compile, evaluate and debug C/C++ programs")
 
 #RUNNING OPTIONS
