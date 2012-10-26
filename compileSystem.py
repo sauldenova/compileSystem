@@ -41,7 +41,7 @@ class bcolors:
 		self.FAIL = ''
 		self.ENDC = ''
     
-    
+
 def stringSplitByNumbers(x):
     r = re.compile('(\d+)')
     l = r.split(x)
@@ -119,7 +119,7 @@ def compileSource(sourceFile, verbose, optimized):
 	return fileName
 
 #Global variables for child process limit
-MAXTIME=1
+MAXTIME=1.0
 MAXMEMBYTES=64*1024*1024
 MAXSTACK=""
 
@@ -130,7 +130,7 @@ def processLimit():
 		sys.stderr.write(bcolors.FAIL + 'Limit NPROC specified is invalid\n' + bcolors.ENDC)
 	try:
 		if(MAXSTACK=="UNLIMITED") :
-			resource.setrlimit(resource.RLIMT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
+			resource.setrlimit(resource.RLIMIT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
 	except ValueError:
 		sys.stderr.write(bcolors.FAIL + 'Limit STACK specified is invalid\n' + bcolors.ENDC)
 	try:
@@ -381,7 +381,7 @@ evaluationUtils.add_option("-w", "--directory",
 				  action="store", type="string", dest="workingDirectory", default=".",
 				  help="Changes the working directory DIR. By default DIR is \'.\'", metavar="DIR")
 evaluationUtils.add_option("-t", "--time",
-				  action="store", type="int", dest="evaluationTime", default=1,
+				  action="store", type="float", dest="evaluationTime", default=1,
 				  help="Defines TIME during the program can be evaluated. Is 1 by default", metavar="TIME")
 evaluationUtils.add_option("-m", "--memory",
 				  action="store", type="int", dest="totalMemory", default=64,
@@ -455,6 +455,7 @@ for sourceFile in args:
 		if executable != "":
 			subprocess.call(['echo', '-ne', bcolors.DEBUG])
 			subprocess.call(['gdb', '-q', executable])
+			subprocess.call(['echo', '-ne', bcolors.ENDC])
 	elif options.test: #Test
 		if executable != "": 
 			for i in range(1, options.testingTimes+1): #Run the program testingTimes
