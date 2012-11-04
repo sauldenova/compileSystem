@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
 #				   -=-=-=-=-=-=-=-=-=-
@@ -147,15 +147,9 @@ MAXMEMBYTES=64*1024*1024
 MAXSTACK=""
 
 def processLimit():
-	try:
-		resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
-	except ValueError:
-		stderr.write(bcolorsObject.FAIL + "Limit NPROC specified is invalid\n" + bcolorsObject.ENDC)
-	try:
-		if(MAXSTACK=="UNLIMITED") :
-			resource.setrlimit(resource.RLIMIT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
-	except ValueError:
-		stderr.write(bcolorsObject.FAIL + "Limit STACK specified is invalid\n" + bcolorsObject.ENDC)
+	resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
+	if(MAXSTACK=="UNLIMITED") :
+		resource.setrlimit(resource.RLIMIT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
 	try:
 		resource.setrlimit(resource.RLIMIT_CPU, (MAXTIME, MAXTIME))
 	except ValueError:
