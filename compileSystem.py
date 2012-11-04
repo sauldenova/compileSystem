@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
 #				   -=-=-=-=-=-=-=-=-=-
@@ -10,112 +10,135 @@
 #
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-#IMPLEMENT no fork()
-#Check intro names with special characters
+# Global constants
+VERSION = "0.5"
+POSSIBLEFILEOUTEND = [".out", ".sol"]
 
-import fnmatch
+# IMPLEMENT no fork()
+# Check intro names with special characters
+# Check for modifications in original code(change make behavior)
+
 import os
 import re
 import resource
 import subprocess
 import signal
-import sys
 import time
+from fnmatch import filter
+from sys import stdout, stderr
 from optparse import OptionGroup, OptionParser
 
-#ASCII color codes for printing in terminal
+# ASCII color codes for printing in terminal
 class bcolors:
-	HEADER = '\033[1;95m'
-	OKBLUE = '\033[94m'
-	OKGREEN = '\033[92m'
-	WARNING = '\033[93m'
-	FAIL = '\033[91m'
-	DEBUG = '\033[37m'
-	ENDC = '\033[0m'
+	HEADER = "\033[1;95m"
+	OKBLUE = "\033[94m"
+	OKGREEN = "\033[92m"
+	WARNING = "\033[93m"
+	FAIL = "\033[91m"
+	DEBUG = "\033[37m"
+	ENDC = "\033[0m"
 
 	def disable(self):
-		self.HEADER = ''
-		self.OKBLUE = ''
-		self.OKGREEN = ''
-		self.WARNING = ''
-		self.FAIL = ''
-		self.ENDC = ''
+		self.HEADER = ""
+		self.OKBLUE = ""
+		self.OKGREEN = ""
+		self.WARNING = ""
+		self.FAIL = ""
+		self.ENDC = ""
     
+# Object declaration for bcolors
+bcolorsObject = bcolors()
 
 def stringSplitByNumbers(x):
-    r = re.compile('(\d+)')
+    r = re.compile("(\d+)")
     l = r.split(x)
     return [int(y) if y.isdigit() else y for y in l]
 		
-#Check if a string has search values
-def specialMatch(strg, search=re.compile(r'[^A-Za-z0-9.]').search): 
+def routeSpecified(strg, search=re.compile(r"[^A-Za-z0-9.]").search): 
+	"""
+	Check if a string has only alphanumeric values, used for finding if a program has a path specified
+	"""
 	return bool(search(strg))
 
 def TrueXor(*args):
 	return sum(args)<=1
 
 def locate(pattern, root=os.curdir):
-    '''Locate all files matching supplied filename pattern in and below
-    supplied root directory.'''
+    """Locate all files matching supplied filename pattern in and below
+    supplied root directory."""
     for path, dirs, files in os.walk(os.path.abspath(root)):
-        for filename in fnmatch.filter(files, pattern):
+        for filename in filter(files, pattern):
             yield os.path.join(path, filename)
 
+def killProcess(sign, frame):
+	stdout.write(bcolorsObject.ENDC);
+	stderr.write(bcolorsObject.ENDC);
+	os.killpg(os.getpgrp(), signal.SIGTERM)
+	os.exit(0)
 
-def compileSource(sourceFile, verbose, optimized):
-	'''Compile the source file provided by the parser'''
-	#Check if source exists
+def compileSource(sourceFile, verbose=True, optimized=True):
+	"""
+	Compile the source file provided by the parser
+	sourceFile is a string to the path of the file to be compiled
+	verbose specifies if the code is to print the warning and error messages
+	optimized adds the -O2 flag to the compiler
+	returns the name of the executable file. It is compiled in the current directory(os.currdir)
+	if an error was encountered, returns ""
+	"""
+	# Check if source exists
 	try:
-		open(sourceFile, 'r')
+		open(sourceFile, "r")
 	except IOError as e:
-		sys.stderr.write(bcolors.FAIL + 'FILE ' + sourceFile + ' DOES NOT EXIST\n' + bcolors.ENDC)
+		print(bcolorsObject.FAIL + "File %s does not exist" % (sourceFile) + bcolorsObject.ENDC, file=stderr)
 		return ""
 	
-	#Check for file extension and set the correct compiler
-	fileName, extension=os.path.splitext(sourceFile)
+	# Check for file extension and set the correct compiler
+	fileName, extension = os.path.splitext(sourceFile)
 	if extension==".cpp":
 		compiler="g++"
 	elif extension==".c":
 		compiler="gcc"
 	else:
-		sys.stderr.write(bcolors.FAIL + 'ERROR: UNKNOWN SOURCE FILE EXTENSION WITH ' + sourceFile + '\n' + bcolors.ENDC)
+		print(bcolorsObject.FAIL + "Error: Unknown file extension of %s" % (sourceFile) + bcolorsObject.ENDC, file = stderr)
 		return ""
 	
-	#Open the make configuration file
-	optimization=""
+	# Open the make configuration file
+	optimization = ""
 	if(optimized):
-		optimization=" -O2"
-	makeFile=open('.makeFile', 'w')
-	makeFile.write('all:\n\t' + compiler + ' -g ' + sourceFile + ' -o ' + fileName + optimization + '\n')
+		optimization = "-O2"
+	makeFile = open(".makeFile", "w")
+	print("all:\n\t %s -g %s -o %s %s" % (compiler, sourceFile, fileName, optimization), file = makeFile)
 	makeFile.close()
 	
-	#Call make
-	compileLog=open(".compile.log", "w")
-	subprocess.call(['make', '-f', '.makeFile'], stdout=compileLog, stderr=compileLog)
+	# Call make
+	compileLog = open(".compile.log", "w")
+	subprocess.call(["make", "-f", ".makeFile"], stdout = compileLog, stderr = compileLog)
 	compileLog.close();
 	
-	#If make returned an error
-	if 'error' in open('.compile.log').read() or 'ld returned' in open('.compile.log').read():
-		sys.stderr.write(bcolors.FAIL + 'COMPILATION ERROR FOR ' + sourceFile + '\nTHE ERROR WAS:\n' + bcolors.ENDC)
-		subprocess.call(['echo', '-ne', bcolors.DEBUG])
-		subprocess.call(['cat', '.compile.log'])
+	# If make returned an error
+	if "error" in open(".compile.log").read() or "ld returned" in open(".compile.log").read():
+		print(bcolorsObject.FAIL + "Compilation error for %s\nThe error was:" % (sourceFile) + bcolorsObject.ENDC, file = stderr)
+		subprocess.call(["echo", "-ne", bcolorsObject.DEBUG])
+		subprocess.call(["cat", ".compile.log"])
+		subprocess.call(["echo", "-ne", bcolorsObject.ENDC])
 		return ""
 	
-	#If make returned a warning
-	elif 'warning' in open('.compile.log').read() and verbose:
-		sys.stderr.write(bcolors.WARNING + 'WARNING ERROR FOR ' + sourceFile + '\nTHE WARNING WAS:\n' + bcolors.ENDC)
-		subprocess.call(['echo', '-ne', bcolors.DEBUG])
-		subprocess.call(['cat', '.compile.log'])
+	# If make returned a warning
+	elif "warning" in open(".compile.log").read() and verbose:
+		print(bcolorsObject.WARNING + "Warning error for %s\nThe warning was:" % (sourceFile) + bcolorsObject.ENDC, file = stderr)
+		subprocess.call(["echo", "-ne", bcolorsObject.DEBUG])
+		subprocess.call(["cat", ".compile.log"])
+		subprocess.call(["echo", "-ne", bcolorsObject.ENDC])
 	
-	#Check if output file exists
+	# Check if output file exists
 	try:
-		open(fileName, 'r');
+		open(fileName, "r");
 	except IOError as e:
-		sys.stderr.write(bcolors.FAIL + 'COMPILATION ERROR UNKNOWN\nPLEASE REPORT THIS ERROR\n' + bcolors.ENDC)
+		print(bcolorsObject.FAIL + "Error ocurred during compilation\nThis error is unknown" + bcolorsObject.ENDC, file = stderr)
 		return ""
 	
-	subprocess.call(['chmod', '+x', fileName]) #Make file executable
-	sys.stdout.write(bcolors.HEADER + 'COMPILATION SUCCESS OF ' + fileName + '\n' + bcolors.ENDC)
+	subprocess.call(["chmod", "+x", fileName]) #Make file executable
+	print(bcolorsObject.HEADER + "Compilation success of %s" % (fileName) + bcolorsObject.ENDC)
 	return fileName
 
 #Global variables for child process limit
@@ -127,342 +150,325 @@ def processLimit():
 	try:
 		resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
 	except ValueError:
-		sys.stderr.write(bcolors.FAIL + 'Limit NPROC specified is invalid\n' + bcolors.ENDC)
+		stderr.write(bcolorsObject.FAIL + "Limit NPROC specified is invalid\n" + bcolorsObject.ENDC)
 	try:
 		if(MAXSTACK=="UNLIMITED") :
 			resource.setrlimit(resource.RLIMIT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
 	except ValueError:
-		sys.stderr.write(bcolors.FAIL + 'Limit STACK specified is invalid\n' + bcolors.ENDC)
+		stderr.write(bcolorsObject.FAIL + "Limit STACK specified is invalid\n" + bcolorsObject.ENDC)
 	try:
 		resource.setrlimit(resource.RLIMIT_CPU, (MAXTIME, MAXTIME))
 	except ValueError:
-		sys.stderr.write(bcolors.FAIL + 'Limit TIME specified is invalid\n' + bcolors.ENDC)
+		stderr.write(bcolorsObject.FAIL + "Limit TIME specified is invalid\n" + bcolorsObject.ENDC)
 	try:
 		resource.setrlimit(resource.RLIMIT_AS, (MAXMEMBYTES, MAXMEMBYTES))
 	except ValueError:
-		sys.stderr.write(bcolors.FAIL + 'Limit MEMORY specified is invalid\n' + bcolors.ENDC)
-
-
+		stderr.write(bcolorsObject.FAIL + "Limit MEMORY specified is invalid\n" + bcolorsObject.ENDC)
 		
-def evaluate(sourceFile, currentDirectory, maximumTime, verbose, ioiMode, memory, noOuts, multipleSolutions, alternateValues):
-	'''Evaluate the source file with the .in cases found in dir'''
-	total=0
-	testCases=0
-	totalTime=0.0;
+def evaluate(sourceFile, currentDirectory, maximumTime=1, verbose=False, 
+			 ioiMode=False, memory=64, noOuts=False, multipleSolutions=False, alternateValues=""):
+	"""
+	Evaluate the source file with the .in cases found in currentDirectory
+	By default the maximum time is the time for the program to be evaluated
+	Verbose mode is true by default, if set to false, the program will only print errors and the end results
+	ioiMode allows an infinite stack only to be limited by memory
+	memory is the maximum size for the virtual memory
+	noOuts only checks the program for Runtime Errors and Time Limit Exceeded not evaluating the result for each case
+	multipleSolutions is similar to noOuts, only it check for a substring in the output file
+	alternateValues is a specialized mode if some cases are worth more than others
+	"""
+	# Global limits variables specified
+	global MAXMEMBYTES, MAXTIME, MAXSTACK
+	MAXTIME, MAXMEMBYTES = maximumTime, memory*1024*1024
+	if ioiMode:
+		MAXSTACK="UNLIMITED"
+
+	# Initialization of local variables
+	total, testCases, totalTime = 0, 0, 0
 	executable, extension = os.path.splitext(sourceFile)
 
+	# Open a loging file for the errors
 	try:
-		open(alternateValues, "r")
+		cslog = open(".cslog", "a")
 	except IOError:
-		if(alternateValues!=""):
-			sys.stderr.write(bcolors.FAIL + 'Failed to open table\n' + bcolors.ENDC);
-		alternateValues=""
-	
-	if(alternateValues!=""):
-		fileValues=open(alternateValues, "r")
-
-	try:
-		cslog=open('.cslog', 'w')
-	except IOError:
-		sys.stderr.write(bcolors.FAIL + 'ABANDON THE SHIP\n' + bcolors.ENDC);
+		print(bcolorsObject.FAIL + "Will not log errors\n" + bcolorsObject.ENDC, file = stderr)
 		return
-	#For each *.in* file found in the working directory sort the files
-	for IN in sorted(locate("*.in*", currentDirectory), key = stringSplitByNumbers):
+
+	# If specified, load the alternate values table
+	if alternateValues != "":
+		try:
+			open(alternateValues, "r")
+		except IOError:
+			print(bcolorsObject.FAIL + "Failed to open table\n" + bcolorsObject.ENDC, file = stderr)
+			alternateValues = ""
+	
+	# For each *.in* file found in the working directory sort the files
+	for fileInAddr in sorted(locate("*.in*", currentDirectory), key=stringSplitByNumbers):
 		#Search if file exists
 		try:
-			fileIn=open(IN, "r")
+			fileIn = open(fileInAddr, "r")
 		except IOError:
+			print("Failed to open file %s" % (fileInAddr), file = cslog)
 			continue
 
-		#Check OUT file exists
-		OUT=IN.replace(".in", ".out")
+		#Check fileOutAddr file exists
 		if not noOuts:
-			try:
-				fileOut=open(OUT, "r")
-			except IOError:
-				OUT=IN.replace(".in", ".sol")
+			for posibleEnding in POSSIBLEFILEOUTEND:
+				fileOutAddr = fileInAddr.replace(".in", posibleEnding)
 				try:
-					fileOut=open(OUT, "r")
+					fileOut = open(fileOutAddr, "r")
 				except IOError:
-					continue
+					if posibleEnding == POSSIBLEFILEOUTEND[-1]:
+						print("Failed to open file %s" % (fileOutAddr), file = cslog)
+						continue
 
-		if(alternateValues==""):
-			testCases+=1
+		# If no alternate table has been loaded augment the number of test cases
+		if alternateValues == "":
+			testCases += 1
 
-		#Obtain the case number from the IN name 
-		caseNumber=IN.replace(os.path.dirname(IN), "")
-		caseNumber=re.sub(r'[^0-9]', '', caseNumber);
+		#Obtain the case number from the fileInAddr name 
+		caseNumber = fileInAddr.replace(os.path.dirname(fileInAddr), "")
+		caseNumber = re.sub(r"[^0-9]", "", caseNumber);
 
 		#Read values from table if specified
 		value=1
-		if(alternateValues!=""):
+		if alternateValues!="" :
 			try:
-				value=float(fileValues.readline())
+				value = float(fileValues.readline())
 			except ValueError:
-				sys.stderr.write(bcolors.FAIL + 'Invalid value from table\nTERMINATING' + bcolors.ENDC)
+				print(bcolorsObject.FAIL + "Invalid value from table\nTERMINATING" + bcolorsObject.ENDC, file = stderr)
 				break
 		
-		filecs=open('/tmp/cs.out', 'w')
-		#Execute the process
-		#ulimit kills the process if it uses more than the given time
-		#Uses time for taking the time of the process
-		#The output is stored in temporal.out file	
-		global MAXMEMBYTES
-		global MAXTIME
-		MAXTIME=maximumTime
-		MAXMEMBYTES=memory*1024*1024
-		if ioiMode:
-			global MAXSTACK
-			MAXSTACK="UNLIMITED"
-		if not specialMatch(executable):
+		# fileOut opens a temporary file in the current directory for the stdout to be redirected
+		fileTemporaryOut = open("cs.out", "w")
+		if not routeSpecified(executable):
 			executable="./"+executable;
 		
-		timeStart=time.time()
-		subprocessState=subprocess.Popen(executable, stdin=fileIn, stdout=filecs, preexec_fn=processLimit)
-		subprocessState.wait()
-		timeP=time.time()-timeStart
-		timePrint='%.2f' % timeP
+		# Start the program evaluation. timeStart and timeUsed are used to determine how much the program took
+		timeStart = time.time()
+		evaluationSubprocess = subprocess.Popen(executable, stdin=fileIn, stdout=fileTemporaryOut, preexec_fn=processLimit)
+		evaluationSubprocess.wait()
+		evaluationReturnCode = evaluationSubprocess.returncode
+		timeUsed = time.time() - timeStart
 
+		# Now the .in file is no longer needed
 		fileIn.close()
-		filecs.close()
-		if timeP>maximumTime:
-			if verbose:
-				totalTime+=float(maximumTime);
-				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":TLE\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
-			continue
-		if int(subprocessState.returncode)==-9:
-			if verbose:
-				totalTime+=float(timePrint);
-				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":MLE\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
-			continue
-		if int(subprocessState.returncode)!=0:
-			if verbose:
-				totalTime+=float(timePrint);
-				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":RTE\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
-			continue
-		#varMemory="ulimit -v " + str(memory*1024) + "; "
-		#varStack=""
-		#if ioiMode:
-			#varStack="ulimit -s unlimited; "
-		#if not specialMatch(executable):
-			#executable="./"+executable;
-		#varTime="ulimit -t " + str(maximumTime) + "; " 
-		#globalLimits=varMemory + varStack + varTime
-		#memoryError=False
-		#try:
-			#os.system(globalLimits + "time -o /tmp/cstime " + executable + " < " + IN + " > /tmp/cs.out 2> /tmp/cserror")
-		#except MemoryError as e:
-			#memoryError=True
+		# Also close the temporary out file so that it can be read
+		fileTemporaryOut.close()
 
-		#For comparation of programs that have multiple solutions,
-		#this script removes all spaces from files and turns them into strings
-		try:
-			filecs=open('/tmp/cs.out', 'r')
-		except IOError:
-			cslog.write('Error opening cs.out\n')
+		# Check if in the execution an error was found.
+		caseStatus = ""
+		if timeUsed > maximumTime:
+			caseStatus = "TLE"
+		elif int(evaluationReturnCode)!=0:
+			if int(evaluationReturnCode)==-9:
+				caseStatus = "MLE"
+			else:
+				caseStatus = "RTE"
+
+		# If execution errors were found, send the correct exit code
+		totalTime += float(timeUsed);
+		if caseStatus != "":
+			if caseStatus == "TLE":
+				totalTime += float(maximumTime - timeUsed);
+			if verbose:
+				print(bcolorsObject.FAIL + "CASE %s:%s\t\t" % (caseNumber, caseStatus) +
+					  bcolorsObject.OKBLUE + "TIME ELAPSED: %.02f" % (float(timeUsed)) + bcolorsObject.ENDC)
 			continue
-		filecs1=open('/tmp/cs1.out', 'w')
-		subprocess.call(['tr', '-d', '\t\n\r\f'], stdin=filecs, stdout=filecs1)
-		filecs.close()
-		filecs1.close()
-		try:
-			temp1=open('/tmp/cs1.out', 'r')
-		except IOError:
-			cslog.write('Error opening cs1.out\n')
-			continue
-		str1=temp1.read()
-		
-		#Converts the output of the program to a string
-		str2=""
+
+		# Converts the output of the program to a string
+		strOutput=""
 		if not noOuts:
-			filecs2=open('/tmp/cs2.out', "w")
-			subprocess.call(['tr', '-d', '\t\n\r\f'], stdin=fileOut, stdout=filecs2)
-			filecs2.close()
+			strOutput = fileOut.read()
+			fileOut.close()
 
-			try:
-				temp2=open('/tmp/cs2.out', 'r')
-			except IOError:
-				cslog.write('Error opening cs2.out\n')
-				continue
-			str2=temp2.read()
-			temp2.close()
+		# Opens the output file from the program to 
+		try:
+			fileTemporaryOut = open("cs.out", "r")
+		except IOError:
+			print("Error opening cs.out", file = cslog)
+			continue
+		strOwnProgram = fileTemporaryOut.read()
+		fileTemporaryOut.close()
+
+		# Use regex sub to remove all whitespace from the string
+		strOwnProgram = re.sub(r'\s', '', strOwnProgram)
+		strOutput = re.sub(r'\s', '', strOutput)
 		
-		if (multipleSolutions and (str1 in str2))or(str1==str2)or(noOuts): #If output file string is in the case string
-			if verbose:
-				totalTime+=float(timePrint);
-				strOut="OK"
-				if noOuts or multipleSolutions:
-					strOut="NP"
-				sys.stdout.write(bcolors.OKGREEN + "CASE " + caseNumber + ":" + strOut + "\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
+		# Check if the result from the case is wrong or right
+		if (multipleSolutions and strOwnProgram in strOutput) or strOwnProgram == strOutput or noOuts: #If output file string is in the case string
+			colorOut = bcolorsObject.OKGREEN
+			caseStatus = "OK"
+			if noOuts or multipleSolutions:
+				caseStatus = "NP"
 			total+=value
 		else: #If not case is wrong
-			if verbose:
-				totalTime+=float(timePrint);
-				sys.stdout.write(bcolors.FAIL + "CASE " + caseNumber + ":WA\t\t")
-				sys.stdout.write(bcolors.OKBLUE + "TIME ELAPSED: " + str(timePrint) + "\n" + bcolors.ENDC)
-		if not noOuts:
-			fileOut.close()
-		
-	if testCases>0 or alternateValues:
+			colorOut = bcolorsObject.FAIL
+			caseStatus = "WA"
+
+		# If verbose mode
 		if verbose:
-			endValue=0
-			if(alternateValues!=""):
-				endValue=total
-			else:
-				endValue=total*100/testCases
-			sys.stdout.write(bcolors.HEADER + "TOTAL: " + str(int(endValue)) + "\t\t")
-			sys.stdout.write(bcolors.HEADER + "TOTAL TIME ELAPSED: " + '%.2f' % totalTime + "\n" + bcolors.ENDC)
+			print(colorOut + "CASE %s:%s\t\t" % (caseNumber, caseStatus) +
+				  bcolorsObject.OKBLUE + "TIME ELAPSED: %.2f" % (float(timeUsed)) + bcolorsObject.ENDC)
+		
+	if testCases > 0 or alternateValues:
+		if alternateValues == "":
+			total = total*100/testCases
+		if verbose:
+			print(bcolorsObject.HEADER + "TOTAL SCORE: %d\t\t" % (total) +
+				  bcolorsObject.HEADER + "TOTAL TIME ELAPSED: %.2f" % (totalTime) + bcolorsObject.ENDC)
 		else:
-			sys.stdout.write(str(total*100/testCases) + "\n")
+			print(total)
 	else:
-		sys.stdout.write(bcolors.FAIL + "ERROR COULD NOT FIND CASES FOR " + sourceFile + "\n" + bcolors.ENDC)
+		print(bcolorsObject.FAIL + "Error: Could not find test cases for %s" % (sourceFile) + bcolorsObject.ENDC)
 
-def killProcess(sign, frame):
-	sys.stdout.write(bcolors.ENDC);
-	sys.stderr.write(bcolors.ENDC);
-	os.killpg(os.getpgrp(), signal.SIGTERM)
-	os.exit(0)
+def parseExpressions():
+	"""
+	Function that implements the parsing of expressions with python module optparse
+	Returns the list of the parsed options and the remaining args of the expression
+	"""
+	# Parser object declaration
+	parser = OptionParser(usage = "%prog [OPTION]... [FILE]...", 
+						  version = "%prog " + str(VERSION), 
+						  description = "Compile, evaluate and debug C/C++ programs")
 
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-#-=-=-=-=-=-=-=-=-=-=-=-=MAIN START-=-=-=-=-=-=-=-=-=-=-=-=-=
-#-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+	# Running the parser
+	parser.add_option("-g", "--compile", 
+					  action = "store_true", dest = "compile", default = False,
+					  help = "If necessary compiles the SOURCE", metavar = "SOURCE")
+	parser.add_option("-d", "--debug", 
+					  action = "store_true", dest = "debug", default = False,
+					  help = "Starts the gdb debugger")
+	parser.add_option("-r", "--test", 
+					  action = "store_true", dest = "test", default = False,
+					  help = "RUNS times runs the program")
+	parser.add_option("-e", "--evaluate", 
+					  action = "store_true", dest = "evaluate", default = False,
+					  help = "Evaluates the code with the test cases found in DIR")
 
-signal.signal(signal.SIGINT, killProcess);
+	# Miscellaneous utils
+	miscellaneousUtils = OptionGroup(parser, "Miscellaneous utilities")
+	miscellaneousUtils.add_option("--output-file",
+					  action = "store_true", dest = "stdoutRedirection", default = False,
+					  help = "Pipes all std output STDOUT to csout.log and STDERR to cserr.log")
+	miscellaneousUtils.add_option("-c", "--copy",
+					  action = "store", type = "string", dest = "copyFile", default = "",
+					  help = "Copies the contents of file SOURCE to the X11 clipboard", metavar = "SOURCE")
+	miscellaneousUtils.add_option("--no-optimize",
+					  action = "store_false", dest = "optimize", default = True,
+					  help = "Sets the -O2 option in the C/C++ compiler. It is true by default")
+	miscellaneousUtils.add_option("--no-compile",
+					  action = "store_true", dest = "noCompile", default = False,
+					  help = "Forces the program to not compile the source file. It is false by default")
+	miscellaneousUtils.add_option("--disable-colors",
+					  action = "store_false", dest = "terminalColors", default = True,
+					  help = "Disables the output colors. Is True by default")
+	parser.add_option_group(miscellaneousUtils)
 
-#PARSER
-parser=OptionParser(usage="%prog [OPTION]... [FILE]...", 
-					version="%prog 1.0",
-					description="Compile, evaluate and debug C/C++ programs")
+	# Testing utils
+	testingUtils = OptionGroup(parser, "Testing utilities")				  
+	testingUtils.add_option("-n", "--runs", 
+					  action = "store", type = "int", dest = "testingTimes", default = 10,
+					  help = "Changes the number of RUNS. By default RUNS is 10", metavar = "RUNS")
+	parser.add_option_group(testingUtils)
 
-#RUNNING OPTIONS
-parser.add_option("-g", "--compile", 
-				  action="store_true", dest="compile", default=False,
-				  help="If necessary compiles the SOURCE", metavar="SOURCE")
-parser.add_option("-d", "--debug", 
-				  action="store_true", dest="debug", default=False,
-				  help="Starts the gdb debugger")
-parser.add_option("-r", "--test", 
-				  action="store_true", dest="test", default=False,
-				  help="RUNS times runs the program")
-parser.add_option("-e", "--evaluate", 
-				  action="store_true", dest="evaluate", default=False,
-				  help="Evaluates the code with the test cases found in DIR")
+	# Evaluation utils
+	evaluationUtils = OptionGroup(parser, "Evaluation utilies")
+	evaluationUtils.add_option("-w", "--directory",
+					  action = "store", type = "string", dest = "workingDirectory", default = ".",
+					  help = "Changes the working directory DIR. By default DIR is \".\"", metavar = "DIR")
+	evaluationUtils.add_option("-t", "--time",
+					  action = "store", type = "float", dest = "evaluationTime", default = 1,
+					  help = "Defines TIME during the program can be evaluated. Is 1 by default", metavar = "TIME")
+	evaluationUtils.add_option("-m", "--memory",
+					  action = "store", type = "int", dest = "totalMemory", default = 64,
+					  help = "Defines maximum MEMORY available for the program during evaluation. Is 64MB by default", metavar = "MEMORY")
+	evaluationUtils.add_option("--no-verbose",
+					  action = "store_false", dest = "verbose", default = True,
+					  help = "Disables detailed output for evaluation. If not enables only prints total")
+	evaluationUtils.add_option("--no-output-files",
+					  action = "store_true", dest = "noOuts", default = False,
+					  help = "Makes evaluator check only for TLE and MLE")
+	evaluationUtils.add_option("--multiple-solutions",
+					  action = "store_true", dest = "multipleSolutions", default = False,
+					  help = "Changes evaluation to consider mutliple solutions")
+	evaluationUtils.add_option("--alternate-values",
+					  action = "store", type = "string", dest = "alternateValues", default = "",
+					  help = "Allows to load an alternate points table", metavar = "POINTS TABLE")
+	evaluationUtils.add_option("--new-ioi-mode",
+					  action = "store_true", dest = "ioiMode", default = False,
+					  help = "Enables new IOI rules mode for evaluation of cases and unlimited stack size")
+	parser.add_option_group(evaluationUtils)
 
-#MISCELLANEOUS UTILS
-miscellaneousUtils=OptionGroup(parser, "Miscellaneous utilities")
-miscellaneousUtils.add_option("--output-file",
-				  action="store_true", dest="stdoutRedirection", default=False,
-				  help="Pipes all std output STDOUT to csout.log and STDERR to cserr.log")
-miscellaneousUtils.add_option("-c", "--copy",
-				  action="store", type="string", dest="copyFile", default="",
-				  help="Copies the contents of file SOURCE to the X11 clipboard", metavar="SOURCE")
-miscellaneousUtils.add_option("--no-optimize",
-				  action="store_false", dest="optimize", default=True,
-				  help="Sets the -O2 option in the C/C++ compiler. It is true by default")
-miscellaneousUtils.add_option("--no-compile",
-				  action="store_true", dest="noCompile", default=False,
-				  help="Forces the program to not compile the source file. It is false by default")
-parser.add_option_group(miscellaneousUtils)
+	#optcomplete.autocomplete(parser)
+	return parser.parse_args()
 
-#TESTING UTILS
-testingUtils=OptionGroup(parser, "Testing utilities")				  
-testingUtils.add_option("-n", "--runs", 
-				  action="store", type="int", dest="testingTimes", default=10,
-				  help="Changes the number of RUNS. By default RUNS is 10", metavar="RUNS")
-parser.add_option_group(testingUtils)
 
-#EVALUATION UTILS
-evaluationUtils=OptionGroup(parser, "Evaluation utilies")
-evaluationUtils.add_option("-w", "--directory",
-				  action="store", type="string", dest="workingDirectory", default=".",
-				  help="Changes the working directory DIR. By default DIR is \'.\'", metavar="DIR")
-evaluationUtils.add_option("-t", "--time",
-				  action="store", type="float", dest="evaluationTime", default=1,
-				  help="Defines TIME during the program can be evaluated. Is 1 by default", metavar="TIME")
-evaluationUtils.add_option("-m", "--memory",
-				  action="store", type="int", dest="totalMemory", default=64,
-				  help="Defines maximum MEMORY available for the program during evaluation. Is 64MB by default", metavar="MEMORY")
-evaluationUtils.add_option("--no-verbose",
-				  action="store_false", dest="verbose", default=True,
-				  help="Disables detailed output for evaluation. If not enables only prints total")
-evaluationUtils.add_option("--no-output-files",
-				  action="store_true", dest="noOuts", default=False,
-				  help="Makes evaluator check only for TLE and MLE")
-evaluationUtils.add_option("--multiple-solutions",
-				  action="store_true", dest="multipleSolutions", default=False,
-				  help="Changes evaluation to consider mutliple solutions")
-evaluationUtils.add_option("--alternate-values",
-				  action="store", type="string", dest="alternateValues", default="",
-				  help="Allows to load an alternate points table", metavar="POINTS TABLE")
-evaluationUtils.add_option("--new-ioi-mode",
-				  action="store_true", dest="ioiMode", default=False,
-				  help="Enables new IOI rules mode for evaluation of cases and unlimited stack size")
-parser.add_option_group(evaluationUtils)
+def main():
+	"""
+	Main entrance to the program if called as a script. Overrides SIGINT behavior, parses the input and
+	decides the correct options
+	"""
+	#TODO Check if terminal has color support
 
-#optcomplete.autocomplete(parser)
+	# Override SIGINT Ctrl^C behavior
+	signal.signal(signal.SIGINT, killProcess); 
 
-(options, args)=parser.parse_args()
+	# Expresion parsing
+	(options, args) = parseExpressions()
 
-#CHECK IF MORE THAN ONE OPTION WAS USED
-if not TrueXor(options.compile, options.debug, options.test, options.evaluate):
-	#print options.compile
-	#print options.debug
-	#print options.test
-	#print options.evaluate
-	sys.stderr.write(bcolors.FAIL + "MORE THAN ONE CORE OPTION WAS USED\nKILLING PROCESS\n" + bcolors.ENDC);
-	sys.exit()
+	# Stdout redirection
+	if options.stdoutRedirection:
+		stdout = open("csout.log", "w")
+		stderr = open("cserr.log", "w")
 
-#STDOUT REDIRECTION
-if options.stdoutRedirection:
-	sys.stdout=open("csout.log", "w")
-	sys.stderr=open("cserr.log", "w")
+	# If no terminal colors
+	if not options.terminalColors:
+		bcolorsObject.disable()
 
-#CLIPBOARD COPY
-if options.copyFile != "":
-	posibleCopy=True
-	try:
-		open(options.copyFile, "r")
-	except IOError:
-		sys.stderr.write(bcolors.FAIL + "ERROR COULD NOT OPEN FILE FOR COPYING" + bcolors.ENDC)
-		posibleCopy=False
-	if posibleCopy:
-		os.system("cat " + options.copyFile + " | xclip -selection c")	
+	# Check if more than one option is used
+	if not TrueXor(options.compile, options.debug, options.test, options.evaluate):
+		print(bcolorsObject.FAIL + "More than one core option was used\nKilling process" + bcolorsObject.ENDC, file = stderr)
+		return
 
-#EXECUTE OPTIONS
-for sourceFile in args:
-	executable, extension=os.path.splitext(sourceFile)
+	# Copy file to clipboard option
+	if options.copyFile != "":
+		try:
+			open(options.copyFile, "r")
+		except IOError:
+			print(bcolorsObject.FAIL + "Error: Could not find file for copying" + bcolorsObject.ENDC, file = stderr)
+		else:
+			os.system("cat " + options.copyFile + " | xclip -selection c")	
 
-	#Check if sourceFile exists
-	try:
-		open(sourceFile, "r")
-	except IOError as e: #Compile
-		sys.stderr(bcolors.FAIL + "ERROR FILE " + str(executable) + "DOES NOT EXIST\n" + bcolors.ENDC);
-		continue
-	
-	#Compiling options
-	if options.compile and not options.noCompile:
-		compileSource(sourceFile, options.verbose, options.optimize)
-		continue
-	
-	if not options.noCompile:
-		compileSource(sourceFile, options.verbose, options.optimize)
+	# Execute options
+	for sourceFile in args:
+		#Check if sourceFile exists
+		try:
+			open(sourceFile, "r")
+		except IOError as e:
+			print(bcolorsObject.FAIL + "Error: File %s does not exist" % (str(sourceFile)) + bcolorsObject.ENDC, file = stderr)
+			continue
+		
+		#Compiling options
+		if options.compile or not options.noCompile:
+			executable = compileSource(sourceFile, options.verbose, options.optimize)
+		
+		if executable == "":
+			continue
 
-	if options.debug: #Debug
-		if executable != "":
-			subprocess.call(['echo', '-ne', bcolors.DEBUG])
-			subprocess.call(['gdb', '-q', executable])
-			subprocess.call(['echo', '-ne', bcolors.ENDC])
-	elif options.test: #Test
-		if executable != "": 
-			for i in range(1, options.testingTimes+1): #Run the program testingTimes
-				sys.stdout.write(bcolors.DEBUG + 'Testing ' + executable + ': ' + str(options.testingTimes-i+1) + ' times\n' + bcolors.ENDC)
-				subprocess.call(['./' + executable]); 
-	elif options.evaluate: #Evaluate
-		if executable != "":
+		if options.debug: #Debug
+			subprocess.call(["echo", "-ne", bcolorsObject.DEBUG])
+			subprocess.call(["gdb", "-q", executable])
+			subprocess.call(["echo", "-ne", bcolorsObject.ENDC])
+		elif options.test: #Test
+			for i in range(options.testingTimes): #Run the program testingTimes
+				print(bcolorsObject.DEBUG + "Testing %s: %s times" % (str(executable), str(options.testingTimes - i)) + bcolorsObject.ENDC)
+				subprocess.call(["./" + executable]); 
+		elif options.evaluate: #Evaluate
 			evaluate(sourceFile, options.workingDirectory, options.evaluationTime, options.verbose, 
-					       options.ioiMode, options.totalMemory, options.noOuts, options.multipleSolutions, options.alternateValues)
+					 options.ioiMode, options.totalMemory, options.noOuts, options.multipleSolutions, options.alternateValues)
+
+
+if __name__ == "__main__" :
+	main() # Call to the main function
 
