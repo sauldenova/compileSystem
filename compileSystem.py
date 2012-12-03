@@ -28,6 +28,9 @@ from fnmatch import filter
 from sys import stdout, stderr
 from optparse import OptionGroup, OptionParser
 
+# Class for the more than one option used error
+class MoreOptionsError(ValueError): pass
+
 # ASCII color codes for printing in terminal
 class bcolors:
 	HEADER = "\033[1;95m"
@@ -141,24 +144,6 @@ def compileSource(sourceFile, verbose=True, optimized=True):
 	print(bcolorsObject.HEADER + "Compilation success of %s" % (fileName) + bcolorsObject.ENDC)
 	return fileName
 
-#Global variables for child process limit
-MAXTIME=1.0
-MAXMEMBYTES=64*1024*1024
-MAXSTACK=""
-
-def processLimit():
-	resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
-	if(MAXSTACK=="UNLIMITED") :
-		resource.setrlimit(resource.RLIMIT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
-	try:
-		resource.setrlimit(resource.RLIMIT_CPU, (MAXTIME, MAXTIME))
-	except ValueError:
-		stderr.write(bcolorsObject.FAIL + "Limit TIME specified is invalid\n" + bcolorsObject.ENDC)
-	try:
-		resource.setrlimit(resource.RLIMIT_AS, (MAXMEMBYTES, MAXMEMBYTES))
-	except ValueError:
-		stderr.write(bcolorsObject.FAIL + "Limit MEMORY specified is invalid\n" + bcolorsObject.ENDC)
-		
 def evaluate(sourceFile, currentDirectory, maximumTime=1, verbose=False, 
 			 ioiMode=False, memory=64, noOuts=False, multipleSolutions=False, alternateValues=""):
 	"""
@@ -171,12 +156,22 @@ def evaluate(sourceFile, currentDirectory, maximumTime=1, verbose=False,
 	multipleSolutions is similar to noOuts, only it check for a substring in the output file
 	alternateValues is a specialized mode if some cases are worth more than others
 	"""
-	# Global limits variables specified
-	global MAXMEMBYTES, MAXTIME, MAXSTACK
-	MAXTIME, MAXMEMBYTES = maximumTime, memory*1024*1024
-	if ioiMode:
-		MAXSTACK="UNLIMITED"
+	maxMemoryInBytes = int(memory*1024*1024)
+	maxTimeInSeconds = int(maximumTime)
 
+	def processLimit():
+		resource.setrlimit(resource.RLIMIT_NPROC, (1, 1))
+		if ioiMode:
+			resource.setrlimit(resource.RLIMIT_STACK, (RLIM_INFINITY, RLIM_INFINITY))
+		try:
+			resource.setrlimit(resource.RLIMIT_CPU, (maxTimeInSeconds, maxTimeInSeconds))
+		except ValueError:
+			stderr.write(bcolorsObject.FAIL + "Limit TIME specified is invalid\n" + bcolorsObject.ENDC)
+		try:
+			resource.setrlimit(resource.RLIMIT_AS, (maxMemoryInBytes, maxMemoryInBytes))
+		except ValueError:
+			stderr.write(bcolorsObject.FAIL + "Limit MEMORY specified is invalid\n" + bcolorsObject.ENDC)
+			
 	# Initialization of local variables
 	total, testCases, totalTime = 0, 0, 0
 	executable, extension = os.path.splitext(sourceFile)
@@ -397,8 +392,7 @@ def parseExpressions():
 	#optcomplete.autocomplete(parser)
 	return parser.parse_args()
 
-
-def main():
+if __name__ == "__main__" :
 	"""
 	Main entrance to the program if called as a script. Overrides SIGINT behavior, parses the input and
 	decides the correct options
@@ -423,7 +417,7 @@ def main():
 	# Check if more than one option is used
 	if not TrueXor(options.compile, options.debug, options.test, options.evaluate):
 		print(bcolorsObject.FAIL + "More than one core option was used\nKilling process" + bcolorsObject.ENDC, file = stderr)
-		return
+		raise MoreOptionsError
 
 	# Copy file to clipboard option
 	if options.copyFile != "":
@@ -461,8 +455,4 @@ def main():
 		elif options.evaluate: #Evaluate
 			evaluate(sourceFile, options.workingDirectory, options.evaluationTime, options.verbose, 
 					 options.ioiMode, options.totalMemory, options.noOuts, options.multipleSolutions, options.alternateValues)
-
-
-if __name__ == "__main__" :
-	main() # Call to the main function
 
