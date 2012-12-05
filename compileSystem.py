@@ -255,11 +255,11 @@ def evaluate(sourceFile, currentDirectory, maximumTime=1, verbose=False,
 		caseStatus = ''
 		if timeUsed > maximumTime:
 			caseStatus = 'TLE'
-		elif int(evaluationReturnCode)!=0:
-			if int(evaluationReturnCode)==-1:
+		elif int(evaluationReturnCode) != 0:
+			if int(evaluationReturnCode) == -1:
 				print(bcolorsObject.FAIL + 'Limits are incorrect killing execution' + bcolorsObject.ENDC, file = stderr)
 				exit(-1)
-			if int(evaluationReturnCode)==-9:
+			if int(evaluationReturnCode) == -9:
 				caseStatus = 'MLE'
 			else:
 				caseStatus = 'RTE'
@@ -404,11 +404,19 @@ def parseExpressions():
 def interactCommandLine():
 	'''Interface for interacting with the user
 	   Returns a (dict with the options, list of the files to process) '''
-	welcomeMessage = 'Compile system %s\nType "help" for the available options' % VERSION
+	welcomeMessage = 'Compile system %s\nCompile, evaluate and debug C/C++ programs\nType "help" for the available options' % VERSION
+	path, file = os.path.split(os.path.realpath(__file__))
+	with open(path + '/helpText.txt') as helpText:
+		helpMessage = helpText.read()
 	print(welcomeMessage)
 	while True:
 		option = input('>>> ')
-		print(option)
+		if option == 'help':
+			print(helpMessage)
+		elif option in ['exit', 'quit']:
+			raise EOFError
+		else:
+			print(option)
 
 if __name__ == '__main__' :
 	'''
